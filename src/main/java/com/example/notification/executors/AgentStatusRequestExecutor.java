@@ -51,6 +51,5 @@ public class AgentStatusRequestExecutor implements RequestExecutor {
         // TODO: Implement this. The request.agent object has all the details about the state changed agent
         // If you need access to settings like API keys, URLs, then call PluginRequest#getPluginSettings
 //        PluginSettings pluginSettings = pluginRequest.getPluginSettings();
-        throw new UnsupportedOperationException();
     }
 }
