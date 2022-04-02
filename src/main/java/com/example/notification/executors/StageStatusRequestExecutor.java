@@ -38,11 +38,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 public class StageStatusRequestExecutor implements RequestExecutor {
-    public static final Logger LOG = Logger.getLoggerFor(StageStatusRequestExecutor.class);
+    private static final Logger LOG = Logger.getLoggerFor(StageStatusRequestExecutor.class);
     private static final Gson GSON = new GsonBuilder().setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES).create();
 
+    private static final Set<String> FAILED_PIPELINES = new ConcurrentSkipListSet<>();
     private final StageStatusRequest request;
     private final PluginRequest pluginRequest;
 
@@ -75,11 +78,34 @@ public class StageStatusRequestExecutor implements RequestExecutor {
             return;
         }
 
-        if (!request.pipeline.stage.state.toLowerCase().contains("failed")) {
+        if (isPassed()) {
+            if (tryRecover()) {
+                LOG.info("pipeline {} recovered", request.pipeline.name);
+                doSendToDingTalk(apiUrl, apiUser, goServerUrl, "Nice! Someone has fixed the pipeline!", "https://icon-library.com/images/success-icon/success-icon-11.jpg");
+            }
             return;
         }
 
-        String text = "Go to fix it please!";
+        if (notFailedPipeline()) {
+            return;
+        }
+        FAILED_PIPELINES.add(request.pipeline.name);
+        doSendToDingTalk(apiUrl, apiUser, goServerUrl, "Fix the pipeline please!", "https://cdn0.iconfinder.com/data/icons/coding-and-programming-1/32/fail_error_problem_crash_round_shape-512.png");
+    }
+
+    private boolean isPassed() {
+        return request.pipeline.stage.state.toLowerCase().contains("passed");
+    }
+
+    private boolean tryRecover() {
+        return FAILED_PIPELINES.remove(request.pipeline.name);
+    }
+
+    private boolean notFailedPipeline() {
+        return !request.pipeline.stage.state.toLowerCase().contains("failed");
+    }
+
+    private void doSendToDingTalk(String apiUrl, String apiUser, String goServerUrl, String text, String picUrl) {
         String title = String.format("Pipeline %s stage %s %s", request.pipeline.name, request.pipeline.stage.name, request.pipeline.stage.state);
         String messageUrl = String.format("%s/go/pipelines/%s/%s/%s/%s", goServerUrl, request.pipeline.name, request.pipeline.counter, request.pipeline.stage.name,  request.pipeline.stage.counter);
         try (CloseableHttpClient client = HttpClients.createDefault()) {
@@ -91,11 +117,11 @@ public class StageStatusRequestExecutor implements RequestExecutor {
                             "    \"link\": {\n" +
                             "        \"text\": \"%s - %s\",\n" +
                             "        \"title\": \"%s\",\n" +
-                            "        \"picUrl\": \"\",\n" +
+                            "        \"picUrl\": \"%s\",\n" +
                             "        \"messageUrl\": \"%s\"\n" +
                             "    }\n" +
                             "}",
-                    apiUser, text, title, messageUrl
+                    apiUser, text, title, picUrl, messageUrl
             );
             request.setEntity(HttpEntities.create(requestBody, StandardCharsets.UTF_8));
             CloseableHttpResponse response = client.execute(request);
