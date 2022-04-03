@@ -89,8 +89,12 @@ public class StageStatusRequestExecutor implements RequestExecutor {
         if (notFailedPipeline()) {
             return;
         }
-        FAILED_PIPELINES.add(request.pipeline.name);
+        FAILED_PIPELINES.add(pipelineStageName());
         doSendToDingTalk(apiUrl, apiUser, goServerUrl, "Fix the pipeline please!", "https://cdn0.iconfinder.com/data/icons/coding-and-programming-1/32/fail_error_problem_crash_round_shape-512.png");
+    }
+
+    private String pipelineStageName() {
+        return String.format("%s|%s", request.pipeline.name, request.pipeline.stage.name);
     }
 
     private boolean isPassed() {
@@ -98,7 +102,7 @@ public class StageStatusRequestExecutor implements RequestExecutor {
     }
 
     private boolean tryRecover() {
-        return FAILED_PIPELINES.remove(request.pipeline.name);
+        return FAILED_PIPELINES.remove(pipelineStageName());
     }
 
     private boolean notFailedPipeline() {
